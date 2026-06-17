@@ -121,22 +121,28 @@ SOURCES = [
     },
     {
         # Aggregator: Cool Places 'digital detox' editorial collection. Coarser data
-        # (one-line taglines, keyword-scored — indicative). Checked June 2026: no
-        # overlap with the providers above (its own cross-reference column only flags
-        # an external "Guardian" file not used here). No coords/postcode/quote column.
+        # (one-line taglines, keyword-scored — indicative). Cool Places is enquiry-only
+        # (no booking on its pages), so it is NOT the real source: each row's true
+        # bookable home was researched and recorded per-row in "Source provider" +
+        # "Original source link" (the Cool Places URL is kept in "Listing link" for
+        # provenance). `provider_col` makes the per-row brand override this entry's
+        # "Cool Places" default; rows with no researched source keep "Cool Places".
+        # `featured` is still grouped by this default (see `_group`), so reassigning
+        # ~40 listings to ~20 micro-providers doesn't flood the homepage.
         "provider": "Cool Places",
         "file": "CoolPlaces_digitaldetox_remoteness_ranking.xlsx",
         "sheet": "Ranked remotest first",
         "evidence_split": None,
         "wifi_free_by_design": False,
         "universal_signals": [],
+        "provider_col": "Source provider",
         "col": {
             "name": "Place", "type": "Type", "region": "Region",
             "county": None, "town": None,
             "postcode": None, "latlng": None, "wifi_listed": None,
             "signals": "Remoteness signals", "counter": "Counter-signals",
             "evidence": None, "blurb": "Listing summary",
-            "link": "Listing link", "images": "Full-size image URLs (array)",
+            "link": "Original source link", "images": "Full-size image URLs (array)",
             "score": "Remoteness score",
         },
     },
@@ -300,12 +306,20 @@ def load_source(src, seen_ids):
 
         type_val = clean_type(str(cell(row, "type")).strip())
 
+        # Provider is the source default, unless the source declares a per-row
+        # provider column (e.g. Cool Places, whose true source varies per listing).
+        provider = src["provider"]
+        pcol = src.get("provider_col")
+        if pcol and pcol in idx and row[idx[pcol]] not in (None, ""):
+            provider = str(row[idx[pcol]]).strip()
+
         score = cell(row, "score")
         out.append({
             "id": slug,
             "score": score if score != "" else 0,
             "name": name,
-            "provider": src["provider"],
+            "provider": provider,
+            "_group": src["provider"],
             "type": type_val,
             "region": str(cell(row, "region")).strip(),
             "county": str(cell(row, "county")).strip(),
@@ -356,11 +370,13 @@ def main():
         if missing:
             print(f"  ! {len(missing)} places missing a unified score: {missing[:10]}")
 
-    # Feature the top few of each provider (by the score now in effect).
-    by_provider = {}
+    # Feature the top few of each source (by the score now in effect). Grouped by
+    # `_group` (the originating source/sheet), NOT the display provider, so a
+    # per-row-reassigned source like Cool Places still contributes only its top few.
+    by_group = {}
     for p in places:
-        by_provider.setdefault(p["provider"], []).append(p)
-    for group in by_provider.values():
+        by_group.setdefault(p["_group"], []).append(p)
+    for group in by_group.values():
         for p in sorted(group, key=lambda x: -x["score"])[:FEATURED_PER_PROVIDER]:
             p["featured"] = True
 
@@ -384,6 +400,8 @@ def main():
         " * badges / feature filters are derived in js/site.js from `signals` + `wifiListed`.\n"
         " */\n"
     )
+    for p in places:
+        p.pop("_group", None)  # internal featuring-group key, not part of the schema
     payload = json.dumps(places, ensure_ascii=False, separators=(",", ":"))
     OUT.write_text(header + "window.PLACES = " + payload + ";\n", encoding="utf-8")
     print(f"Wrote {len(places)} places to {OUT} ({OUT.stat().st_size // 1024} KB)")
