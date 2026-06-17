@@ -172,7 +172,26 @@
     var excludeFilters = [
       { value: "bothy", label: "Bothies & bunkhouses", test: function (p) { return feat(p).bothy; } },
     ];
-    var providers = unique(PLACES, "provider");
+    // Bundle small providers (<=2 listings) under a single "Other" facet in the
+    // Provider filter. A place's real `provider` is unchanged everywhere else
+    // (cards, detail page, "View on X"); this only groups the browse facet.
+    var OTHER_PROVIDER = "Other";
+    var providerCounts = {};
+    PLACES.forEach(function (p) {
+      providerCounts[p.provider] = (providerCounts[p.provider] || 0) + 1;
+    });
+    function providerGroup(p) {
+      return providerCounts[p.provider] > 2 ? p.provider : OTHER_PROVIDER;
+    }
+    // Distinct facet values: named providers (>2 listings) A–Z, then "Other" last.
+    var providers = [], seenProvider = {}, hasOther = false;
+    PLACES.forEach(function (p) {
+      var g = providerGroup(p);
+      if (g === OTHER_PROVIDER) { hasOther = true; return; }
+      if (!seenProvider[g]) { seenProvider[g] = true; providers.push(g); }
+    });
+    providers.sort();
+    if (hasOther) providers.push(OTHER_PROVIDER);
     var regions = unique(PLACES, "region");
     var types = unique(PLACES, "type");
 
@@ -193,7 +212,7 @@
 
     html += '<fieldset class="filter-group"><legend>Provider</legend>';
     providers.forEach(function (pr) {
-      html += checkRow("provider", pr, pr, countWhere(function (p) { return p.provider === pr; }));
+      html += checkRow("provider", pr, pr, countWhere(function (p) { return providerGroup(p) === pr; }));
     });
     html += "</fieldset>";
 
@@ -264,7 +283,7 @@
 
       filtered = PLACES.filter(function (p) {
         if (exclSel.length && passGroup(p, exclSel, excludeFilters)) return false;
-        if (providerSel.length && providerSel.indexOf(p.provider) === -1) return false;
+        if (providerSel.length && providerSel.indexOf(providerGroup(p)) === -1) return false;
         if (connSel.length && !passGroup(p, connSel, connectivityFilters)) return false;
         if (featSel.length && !passGroup(p, featSel, featureFilters)) return false;
         if (typeSel.length && typeSel.indexOf(p.type) === -1) return false;
