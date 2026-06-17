@@ -154,6 +154,44 @@ GLAMPING_WORDS = (
 )
 
 
+SCORE_CAPS = {"access": 25, "signal": 20, "offgrid": 13, "wifi": 12, "framing": 12, "distance": 10, "wild": 8}
+# Listing wording that means signal WAS assessed (so don't infer it).
+_SIGNAL_STATED = ("reception", "mobile signal", "phone signal")
+# Wording implying genuinely no signal vs merely-remote (poor signal).
+_DEEP_WILD = ("wilderness", "most remote", "cut off", "miles from a road", "no road",
+              "peninsula", "great wilderness", "only people", "full hermit", "turn your back on civilisation")
+_REMOTE_FRAMING = ("remote", "secluded", "isolated", "hidden", "away from it all", "away-from-it-all",
+                   "on an island", "national park", "moor", "mountain", "hard to reach", "wilds", "off the beaten")
+
+
+def adjust_for_fairness(place):
+    """Correct two systematic biases in the listing-copy scores (see CLAUDE.md):
+    (A) terse listings (esp. National Trust) leave mobile signal unstated even when an
+        off-grid, remote place plainly has none — infer it; (B) a sub-300m hike-in was
+        over-credited as a 'notable walk-in'. Returns a tag for logging, mutates breakdown."""
+    bd = place.get("scoreBreakdown")
+    if not bd:
+        return None
+    sigs = place.get("signals", [])
+    sig_text = " ".join(sigs).lower()
+    text = sig_text + " " + (place.get("blurb") or "").lower()
+    off_grid = any("off-grid" in s.lower() for s in sigs)
+    tag = None
+
+    # (A) Infer signal when unstated + off-grid + remote-framed.
+    if bd.get("signal", 0) == 0 and off_grid and not any(t in sig_text for t in _SIGNAL_STATED):
+        if any(w in text for w in _DEEP_WILD):
+            bd["signal"] = 20; tag = "signal->20"
+        elif any(w in text for w in _REMOTE_FRAMING):
+            bd["signal"] = 13; tag = "signal->13"
+
+    # (B) Ease access for short hike-ins over-credited above the remote-drive tier.
+    hikes = [int(x) for x in re.findall(r"hike-in\s*(\d+)\s*m", sig_text)]
+    if hikes and min(hikes) < 300 and bd.get("access", 0) > 13:
+        bd["access"] = 13; tag = (tag + " +access<=13") if tag else "access<=13"
+    return tag
+
+
 def clean_type(text):
     """Bucket free-text type descriptions into a small set of filterable categories.
     Applied to every provider so the Stay-type filter stays clean."""
@@ -302,14 +340,18 @@ def main():
     if scores_file.exists():
         unified = json.loads(scores_file.read_text(encoding="utf-8"))
         applied = 0
+        adjusted = 0
         for p in places:
             u = unified.get(p["id"])
             if u:
-                p["score"] = u["score"]
-                p["scoreBreakdown"] = u.get("breakdown")
+                p["scoreBreakdown"] = dict(u.get("breakdown") or {})
                 p["scoreWhy"] = u.get("why", "")
+                if adjust_for_fairness(p):
+                    adjusted += 1
+                bd = p["scoreBreakdown"]
+                p["score"] = sum(min(SCORE_CAPS.get(k, 0), int(v)) for k, v in bd.items())
                 applied += 1
-        print(f"  unified scores applied: {applied}/{len(places)}")
+        print(f"  unified scores applied: {applied}/{len(places)} (fairness-adjusted: {adjusted})")
         missing = [p["id"] for p in places if p["id"] not in unified]
         if missing:
             print(f"  ! {len(missing)} places missing a unified score: {missing[:10]}")
