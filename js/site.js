@@ -241,7 +241,7 @@
     });
     html += "</fieldset>";
 
-    html += '<fieldset class="filter-group filter-group--scroll"><legend>Region</legend>';
+    html += '<fieldset class="filter-group"><legend>Region</legend>';
     regions.forEach(function (r) {
       html += checkRow("region", r, r, countWhere(function (p) { return p.region === r; }));
     });
