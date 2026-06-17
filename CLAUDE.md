@@ -4,6 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Out of Range** — a static site that ranks 577 remote UK places to stay (cottages, cabins, glamping, campsites) by how cut off they are: no WiFi / no signal / off-grid / hard to reach. Listings come from five providers — National Trust, Unplugged, Unyoked, Canopy & Stars and Cool Places (the last two are aggregators). Personal project — **not** a Cloud of Goods repo, so a normal CLAUDE.md (this file) is fine.
 
+## Companion docs
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — big-picture map: the spreadsheet → `build_data.py` → `js/data.js` → pages pipeline, the three layers (data / scoring / presentation), the per-place data model, and deployment.
+- **[FLOWS.md](FLOWS.md)** — three representative user journeys (total-detox seeker, connected-but-quiet planner, type-and-place browser) with the UI + code path behind each.
+
 ## Commands
 
 Plain HTML/CSS/JS — **no build system, no package manager, no tests, no linter.** The only tooling is two Python scripts (need `pip install openpyxl`). Don't invent test/lint commands; there are none.
