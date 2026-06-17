@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+
+# Scoring workflow scratch (regenerated; only unified_scores.json is committed)
+data/_score_chunks/
+
+# Tooling / OS
+.playwright-mcp/
+.DS_Store
+Thumbs.db
+*.tmp
