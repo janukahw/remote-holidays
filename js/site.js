@@ -155,7 +155,8 @@
   var resultsEl = document.getElementById("results");
   if (resultsEl) {
     var connectivityFilters = [
-      { value: "wifi", label: "WiFi available", test: function (p) { return conn(p).wifiGood; } },
+      // "WiFi available" intentionally omitted — Out of Range users want disconnection,
+      // not connectivity, so the facets surface only remoteness-relevant options.
       { value: "patchywifi", label: "Patchy WiFi", test: function (p) { return conn(p).wifiPatchy; } },
       { value: "nowifi", label: "No WiFi", test: function (p) { return conn(p).wifiNone; } },
       { value: "offgrid", label: "Off-grid power", test: function (p) { return conn(p).offGrid; } },
