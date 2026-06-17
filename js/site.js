@@ -193,7 +193,6 @@
     });
     providers.sort();
     if (hasOther) providers.push(OTHER_PROVIDER);
-    var regions = unique(PLACES, "region");
     var types = unique(PLACES, "type");
 
     function countWhere(fn) { return PLACES.filter(fn).length; }
@@ -241,9 +240,23 @@
     });
     html += "</fieldset>";
 
+    // Region facet, grouped under country sub-headings (England, Wales,
+    // Scotland, Northern Ireland). Each region belongs to exactly one country.
+    var COUNTRY_ORDER = ["England", "Wales", "Scotland", "Northern Ireland"];
+    var regionsByCountry = {};
+    PLACES.forEach(function (p) {
+      var c = p.country || "Other";
+      (regionsByCountry[c] = regionsByCountry[c] || {})[p.region] = true;
+    });
+    var countryOrder = COUNTRY_ORDER.filter(function (c) { return regionsByCountry[c]; })
+      .concat(Object.keys(regionsByCountry).filter(function (c) { return COUNTRY_ORDER.indexOf(c) === -1; }).sort());
+
     html += '<fieldset class="filter-group"><legend>Region</legend>';
-    regions.forEach(function (r) {
-      html += checkRow("region", r, r, countWhere(function (p) { return p.region === r; }));
+    countryOrder.forEach(function (country) {
+      html += '<p class="filter-subhead">' + esc(country) + "</p>";
+      Object.keys(regionsByCountry[country]).sort().forEach(function (r) {
+        html += checkRow("region", r, r, countWhere(function (p) { return p.region === r; }));
+      });
     });
     html += "</fieldset>";
 

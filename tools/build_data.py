@@ -217,6 +217,57 @@ def clean_type(text):
     return "Cabin"
 
 
+# Travel-destination region taxonomy, grouped by country. Each listing is mapped
+# to exactly one canonical region by substring-matching its county / region / town
+# text (county first — it's the richest, cleanest signal) against the keyword lists
+# below, in order; first hit wins. Order is most-specific -> least, so the
+# country-level fallbacks (bare "wales"/"scotland") sit LAST. Keep NI keys as full
+# "county X" phrases so "down"/"londonderry" don't clash with "South Downs"/"London".
+REGION_RULES = [
+    ("Wales", "North Wales", ["gwynedd", "conwy", "anglesey", "snowdonia", "eryri", "betws", "wrexham", "flintshire", "denbighshire", "llangollen", "berwyn", "clwydian", "north wales"]),
+    ("Wales", "Mid Wales", ["ceredigion", "powys", "tylwch", "machynlleth", "mid wales"]),
+    ("Wales", "South & West Wales", ["pembroke", "carmarthen", "monmouth", "brecon", "bannau", "swansea", "gower", "glamorgan", "south wales"]),
+    ("Scotland", "Scottish Highlands", ["inverness", "ardnish", "lochaber", "fort william", "skye", "wester ross", "sutherland", "caithness", "highland"]),
+    ("Scotland", "Argyll", ["argyll", "bute", "oban", "bonawe", "lochgilphead"]),
+    ("Scotland", "Cairngorms & Aberdeenshire", ["cairngorm", "aberdeenshire", "grampian", "speyside", "aviemore"]),
+    ("Scotland", "Scottish Borders & Perthshire", ["scottish borders", "perthshire", "stirling", "dumfries", "galloway", "lothian", "fife"]),
+    ("Northern Ireland", "Northern Ireland", ["county fermanagh", "county down", "county antrim", "county londonderry", "county tyrone", "county armagh", "northern ireland"]),
+    ("England", "Cornwall", ["cornwall", "bodmin"]),
+    ("England", "Devon", ["devon", "exeter", "dartmoor"]),
+    ("England", "Dorset", ["dorset", "cranborne"]),
+    ("England", "Somerset & Wiltshire", ["somerset", "wiltshire", "bristol", "frome", "porlock", "exmoor", "wessex downs"]),
+    ("England", "Cotswolds & Gloucestershire", ["cotswold", "gloucester"]),
+    ("England", "Peak District & Derbyshire", ["peak district", "derbyshire"]),
+    ("England", "Lake District & Cumbria", ["cumbria", "lake district", "lakeland", "ullswater", "ennerdale"]),
+    ("England", "Yorkshire", ["yorkshire", "dalby"]),
+    ("England", "Northumberland & North East", ["northumberland", "county durham", "tyne & wear", "tyne and wear"]),
+    ("England", "Shropshire & the Marches", ["shropshire", "herefordshire", "worcestershire", "staffordshire", "welsh border"]),
+    ("England", "Cheshire & the North West", ["cheshire", "peckforton", "beeston", "tarporley", "manchester", "lancashire"]),
+    ("England", "Norfolk", ["norfolk"]),
+    ("England", "Suffolk", ["suffolk", "dedham"]),
+    ("England", "Isle of Wight", ["isle of wight"]),
+    ("England", "New Forest & Hampshire", ["new forest", "hampshire", "candover"]),
+    ("England", "Kent, Surrey & Sussex", ["kent", "surrey", "sussex", "south downs", "high weald", "tunbridge", "south of london"]),
+    ("England", "East Midlands", ["nottingham", "leicestershire", "northamptonshire", "lincolnshire", "notts", "rutland"]),
+    ("England", "Cambridgeshire & the East", ["cambridgeshire", "essex", "east anglia", "saffron walden", "finchingfield"]),
+    ("England", "Chilterns & Home Counties", ["hertfordshire", "berkshire", "buckingham", "oxford", "oxon", "chiltern", "thatcham", "thames", "west of london", "north of london", "gaddesden", "westmill"]),
+    ("Wales", "Wales", ["wales", "cymru"]),
+    ("Scotland", "Scotland", ["scotland", "scottish"]),
+]
+
+
+def map_region(region, county, town):
+    """Map a listing to (country, canonical_region) from its location text.
+    County is matched first as it's the cleanest signal; region/town are
+    fallbacks. Returns ('England', 'Elsewhere in England') only if nothing hits
+    (currently never — all known listings resolve to a specific region)."""
+    text = " || ".join([county or "", region or "", town or ""]).lower()
+    for country, canon, keywords in REGION_RULES:
+        if any(kw in text for kw in keywords):
+            return country, canon
+    return "England", "Elsewhere in England"
+
+
 def strip_weights(text):
     return WEIGHT_RE.sub("", text)
 
@@ -306,6 +357,14 @@ def load_source(src, seen_ids):
 
         type_val = clean_type(str(cell(row, "type")).strip())
 
+        # Normalise the messy per-provider location strings to one canonical
+        # travel region (+ its country) for the grouped Region filter; keep the
+        # raw county/town for search and the detail page's specificity.
+        raw_region = str(cell(row, "region")).strip()
+        county = str(cell(row, "county")).strip()
+        town = str(cell(row, "town")).strip()
+        country, region = map_region(raw_region, county, town)
+
         # Provider is the source default, unless the source declares a per-row
         # provider column (e.g. Cool Places, whose true source varies per listing).
         provider = src["provider"]
@@ -321,9 +380,10 @@ def load_source(src, seen_ids):
             "provider": provider,
             "_group": src["provider"],
             "type": type_val,
-            "region": str(cell(row, "region")).strip(),
-            "county": str(cell(row, "county")).strip(),
-            "town": str(cell(row, "town")).strip(),
+            "country": country,
+            "region": region,
+            "county": county,
+            "town": town,
             "postcode": str(cell(row, "postcode")).strip(),
             "lat": lat,
             "lng": lng,
