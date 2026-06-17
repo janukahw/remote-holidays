@@ -17,6 +17,21 @@ Plain HTML/CSS/JS — **no build system, no package manager, no tests, no linter
 - **Cache-bust after hand-editing css/js:** `python tools/bump_version.py`.
 - **Local-dev gotcha:** browsers cache `js/site.js` hard during rapid edits. Hard-refresh (Ctrl+F5) or serve from a fresh port if a change doesn't show. (Playwright/automation can't use `file://` — serve over http.)
 
+## Releasing — required every time
+
+Single-user project: **every change is committed, pushed, deployed to GitHub Pages, and verified live before it counts as done.** Cache-busting is a **mandatory** part of each release — assets are served with a content-hash `?v=` query, so a release that changes css/js/data **without re-stamping ships invisibly** (browsers keep serving the old cached file). Do this, in order, for every release:
+
+1. **Re-stamp** so the `?v=<hash>` matches the new bytes of every changed asset:
+   - data / spreadsheet change → `python tools/build_data.py` (regenerates `js/data.js` *and* restamps);
+   - css/js-only edit → `python tools/bump_version.py`.
+   Never hand-edit a `?v=` value, and **never commit a css/js/data change without re-stamping in the same commit.**
+2. **Check** the `<link>`/`<script>` tags in all three HTML pages now reference the new hashes (`git diff` them).
+3. **Commit + push** to `main` — GitHub Pages auto-builds (~1–2 min).
+4. **Verify live** before declaring done: poll until the deployed site serves the new `?v=`, then spot-check content, e.g.
+   `curl -s https://janukahw.github.io/remote-holidays/index.html | grep 'v=<newhash>'`.
+
+A release whose css/js/data changed but whose committed HTML still points at the old `?v=` is a **bug** — users won't get the update until their cache expires.
+
 ## Architecture
 
 Three pages — `index.html`, `browse.html`, `place.html` — share `css/styles.css`, `js/data.js` (generated) and `js/site.js`.
